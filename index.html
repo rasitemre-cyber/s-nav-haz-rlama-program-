@@ -520,13 +520,17 @@ function snap(){
 
   const processed = docEffect(cvs);
 
+  // Direkt kaydet
+  S.questions.push(processed);
+  updQCount();
+  renderQ();
+  document.getElementById('btn-fin').disabled = false;
+  toast(`Soru ${S.questions.length} eklendi ✓`, 'ok');
+
   // Flash
   const wrap=document.querySelector('.cam-wrap');
   wrap.style.filter='brightness(3)';
   setTimeout(()=>{ wrap.style.filter=''; },120);
-
-  // Silgi editörünü aç
-  openEraser(processed, S.questions.length);
 }
 
 function docEffect(cvs){
@@ -895,30 +899,25 @@ function openEraser(dataURL, idx){
 function closeEraser(save){
   const bg  = document.getElementById('eraser-bg');
   const cvs = document.getElementById('eraser-canvas');
+
   if(save && _eraserIdx >= 0){
-    // Orijinal boyuta geri scale et
-    const origW = parseInt(cvs.dataset.origW);
-    const origH = parseInt(cvs.dataset.origH);
-    const out = document.createElement('canvas');
-    out.width = origW; out.height = origH;
-    const octx = out.getContext('2d');
-    const img = new Image();
-    img.onload = ()=>{
-      octx.drawImage(img, 0, 0, origW, origH);
-      if(_eraserIdx < S.questions.length){
-        S.questions[_eraserIdx] = out.toDataURL('image/jpeg',.95);
-      } else {
-        S.questions.push(out.toDataURL('image/jpeg',.95));
-        updQCount();
-        document.getElementById('btn-fin').disabled=false;
-        toast(`Soru ${S.questions.length} eklendi ✓`,'ok');
-      }
-      renderQ();
-    };
-    img.src = cvs.toDataURL('image/png');
-  } else if(!save && _eraserIdx >= S.questions.length){
-    // Yeni soru eklenmeden iptal edildi — hiçbir şey yapma
+    // Canvas'taki mevcut görüntüyü direkt kaydet (ölçekleme yok, ne görünüyorsa o)
+    const dataURL = cvs.toDataURL('image/jpeg', 0.95);
+
+    if(_eraserIdx < S.questions.length){
+      // Mevcut soruyu güncelle
+      S.questions[_eraserIdx] = dataURL;
+      toast('Soru güncellendi ✓', 'ok');
+    } else {
+      // Yeni soru ekle
+      S.questions.push(dataURL);
+      updQCount();
+      document.getElementById('btn-fin').disabled = false;
+      toast(`Soru ${S.questions.length} eklendi ✓`, 'ok');
+    }
+    renderQ();
   }
+  // İptal: yeni soruysa hiçbir şey ekleme
   bg.classList.remove('on');
   _eraserIdx = -1;
 }
