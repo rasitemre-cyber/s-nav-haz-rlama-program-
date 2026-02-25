@@ -175,6 +175,19 @@ body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text)}
 ::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+/* ── ERASİR EDITÖR ── */
+.eraser-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:400;flex-direction:column}
+.eraser-bg.on{display:flex}
+.eraser-topbar{display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--card);border-bottom:1px solid var(--border);flex-shrink:0}
+.eraser-topbar h2{font-size:15px;font-weight:800;flex:1}
+.eraser-wrap{flex:1;overflow:hidden;position:relative;display:flex;align-items:center;justify-content:center;background:#111}
+#eraser-canvas{touch-action:none;cursor:crosshair;max-width:100%;max-height:100%;display:block}
+.eraser-bar{display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--card);border-top:1px solid var(--border);flex-shrink:0}
+.eraser-size{-webkit-appearance:none;appearance:none;flex:1;height:4px;background:var(--border);border-radius:2px;outline:none}
+.eraser-size::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;background:var(--accent);border-radius:50%}
+.eraser-hint{font-size:10px;color:var(--muted);font-weight:600}
+.q-edit{position:absolute;bottom:6px;right:32px;width:26px;height:26px;background:rgba(108,99,255,.7);border:none;border-radius:8px;color:#fff;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 </style>
 </head>
 <body>
@@ -305,6 +318,24 @@ body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text)}
       <button class="btn btn-o" onclick="closeModal()">İptal</button>
       <button class="btn btn-p" onclick="gotoPreview()">Önizle →</button>
     </div>
+  </div>
+</div>
+
+<!-- ERASER EDITOR -->
+<div class="eraser-bg" id="eraser-bg">
+  <div class="eraser-topbar">
+    <button class="bar-back" onclick="closeEraser(false)">✕</button>
+    <h2>✏️ Düzenle</h2>
+    <button class="btn btn-sm btn-o" onclick="eraserUndo()" style="width:auto">↩ Geri Al</button>
+    <button class="btn btn-sm btn-p" onclick="closeEraser(true)" style="width:auto">✅ Kaydet</button>
+  </div>
+  <div class="eraser-wrap">
+    <canvas id="eraser-canvas"></canvas>
+  </div>
+  <div class="eraser-bar">
+    <span class="eraser-hint">🔲 Silgi boyutu:</span>
+    <input type="range" class="eraser-size" id="eraser-size" min="5" max="80" value="20">
+    <span id="eraser-size-lbl" style="font-size:12px;font-weight:700;color:var(--accent2);min-width:28px">20</span>
   </div>
 </div>
 
@@ -460,22 +491,35 @@ function snap(){
   if(vid.videoWidth===0){ toast('Kamera hazır değil','err'); return; }
 
   const cvs=document.getElementById('cvs');
-  // Crop to 4:3 ratio (matches PDF question layout)
   const vw=vid.videoWidth, vh=vid.videoHeight;
-  const targetW=vw, targetH=Math.round(vw*(3/4));
-  const srcY=Math.max(0, Math.round((vh-targetH)/2));
-  cvs.width=targetW;
-  cvs.height=Math.min(targetH, vh);
-  const ctx=cvs.getContext('2d');
-  ctx.drawImage(vid, 0, srcY, vw, Math.min(targetH,vh), 0, 0, targetW, Math.min(targetH,vh));
+  const isLandscape = vw > vh;
+
+  if(isLandscape){
+    // Yatay çekilmiş → 90° döndür, dikey hale getir
+    cvs.width = vh;
+    cvs.height = vw;
+    const ctx=cvs.getContext('2d');
+    ctx.translate(vh, 0);
+    ctx.rotate(Math.PI/2);
+    ctx.drawImage(vid, 0, 0, vw, vh);
+    ctx.resetTransform();
+  } else {
+    // Dikey — normal çerçeveleme
+    cvs.width = vw;
+    cvs.height = vh;
+    const ctx=cvs.getContext('2d');
+    ctx.drawImage(vid, 0, 0);
+  }
 
   const processed = docEffect(cvs);
-  addQ(processed);
 
   // Flash
   const wrap=document.querySelector('.cam-wrap');
   wrap.style.filter='brightness(3)';
   setTimeout(()=>{ wrap.style.filter=''; },120);
+
+  // Silgi editörünü aç
+  openEraser(processed, S.questions.length);
 }
 
 function docEffect(cvs){
@@ -553,7 +597,11 @@ function renderQ(){
   S.questions.forEach((q,i)=>{
     const d=document.createElement('div');
     d.className='q-thumb';
-    d.innerHTML=`<img src="${q}"><span class="q-num">S.${i+1}</span><button class="q-del" onclick="delQ(${i})">✕</button>`;
+    d.innerHTML=`
+      <img src="${q}" onclick="openEraser('${q}',${i})">
+      <span class="q-num">S.${i+1}</span>
+      <button class="q-del" onclick="delQ(${i})">✕</button>
+      <button class="q-edit" onclick="openEraser(S.questions[${i}],${i})">✏️</button>`;
     g.appendChild(d);
   });
 }
@@ -802,6 +850,138 @@ async function makePDF(){
     toast('Hata: '+e.message,'err');
   }
 }
+
+// ─── ERASER ────────────────────────────────
+let _eraserIdx = -1;
+let _eraserHistory = [];
+let _eraserDrawing = false;
+
+function openEraser(dataURL, idx){
+  _eraserIdx = idx;
+  _eraserHistory = [];
+  const bg = document.getElementById('eraser-bg');
+  const cvs = document.getElementById('eraser-canvas');
+  bg.classList.add('on');
+
+  const img = new Image();
+  img.onload = ()=>{
+    // Canvas boyutunu ekrana sığacak şekilde ayarla
+    const maxW = window.innerWidth;
+    const maxH = window.innerHeight - 130; // topbar + bottombar
+    const scale = Math.min(maxW/img.width, maxH/img.height, 1);
+    cvs.width  = Math.round(img.width  * scale);
+    cvs.height = Math.round(img.height * scale);
+    cvs.dataset.scale  = scale;
+    cvs.dataset.origW  = img.width;
+    cvs.dataset.origH  = img.height;
+    const ctx = cvs.getContext('2d');
+    ctx.drawImage(img, 0, 0, cvs.width, cvs.height);
+    _eraserHistory = [ctx.getImageData(0,0,cvs.width,cvs.height)];
+  };
+  img.src = dataURL;
+}
+
+function closeEraser(save){
+  const bg  = document.getElementById('eraser-bg');
+  const cvs = document.getElementById('eraser-canvas');
+  if(save && _eraserIdx >= 0){
+    // Orijinal boyuta geri scale et
+    const origW = parseInt(cvs.dataset.origW);
+    const origH = parseInt(cvs.dataset.origH);
+    const out = document.createElement('canvas');
+    out.width = origW; out.height = origH;
+    const octx = out.getContext('2d');
+    const img = new Image();
+    img.onload = ()=>{
+      octx.drawImage(img, 0, 0, origW, origH);
+      if(_eraserIdx < S.questions.length){
+        S.questions[_eraserIdx] = out.toDataURL('image/jpeg',.95);
+      } else {
+        S.questions.push(out.toDataURL('image/jpeg',.95));
+        updQCount();
+        document.getElementById('btn-fin').disabled=false;
+        toast(`Soru ${S.questions.length} eklendi ✓`,'ok');
+      }
+      renderQ();
+    };
+    img.src = cvs.toDataURL('image/png');
+  } else if(!save && _eraserIdx >= S.questions.length){
+    // Yeni soru eklenmeden iptal edildi — hiçbir şey yapma
+  }
+  bg.classList.remove('on');
+  _eraserIdx = -1;
+}
+
+function eraserUndo(){
+  if(_eraserHistory.length < 2) return;
+  _eraserHistory.pop();
+  const cvs = document.getElementById('eraser-canvas');
+  cvs.getContext('2d').putImageData(_eraserHistory[_eraserHistory.length-1], 0, 0);
+}
+
+// Silgi çizim olayları
+(function(){
+  const sizeSlider = document.getElementById('eraser-size');
+  const sizeLbl    = document.getElementById('eraser-size-lbl');
+  sizeSlider.addEventListener('input', ()=>{ sizeLbl.textContent = sizeSlider.value; });
+
+  function getPos(e, cvs){
+    const r = cvs.getBoundingClientRect();
+    const touch = e.touches ? e.touches[0] : e;
+    return { x: touch.clientX - r.left, y: touch.clientY - r.top };
+  }
+
+  function eraserStart(e){
+    e.preventDefault();
+    _eraserDrawing = true;
+    const cvs = document.getElementById('eraser-canvas');
+    const ctx = cvs.getContext('2d');
+    _eraserHistory.push(ctx.getImageData(0,0,cvs.width,cvs.height));
+    // Limit history to 20 steps
+    if(_eraserHistory.length > 21) _eraserHistory.shift();
+    const p = getPos(e, cvs);
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.fillStyle = 'rgba(0,0,0,1)';
+    const r = parseInt(document.getElementById('eraser-size').value);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+    // Beyaz arka plan koru
+    paintWhite(ctx, cvs, p.x, p.y, r);
+  }
+
+  function eraserMove(e){
+    if(!_eraserDrawing) return;
+    e.preventDefault();
+    const cvs = document.getElementById('eraser-canvas');
+    const ctx = cvs.getContext('2d');
+    const p = getPos(e, cvs);
+    const r = parseInt(document.getElementById('eraser-size').value);
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  function eraserEnd(){ _eraserDrawing = false; }
+
+  function paintWhite(ctx, cvs, x, y, r){
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  const cvs = document.getElementById('eraser-canvas');
+  cvs.addEventListener('mousedown', eraserStart);
+  cvs.addEventListener('mousemove', eraserMove);
+  cvs.addEventListener('mouseup', eraserEnd);
+  cvs.addEventListener('touchstart', eraserStart, {passive:false});
+  cvs.addEventListener('touchmove', eraserMove, {passive:false});
+  cvs.addEventListener('touchend', eraserEnd);
+})();
 
 function load(t,s){document.getElementById('loading').classList.remove('off');document.getElementById('ltxt').textContent=t;document.getElementById('lsub').textContent=s;}
 function upd(t,s){document.getElementById('ltxt').textContent=t;document.getElementById('lsub').textContent=s;}
