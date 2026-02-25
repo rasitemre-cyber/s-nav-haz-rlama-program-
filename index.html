@@ -337,8 +337,9 @@ body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text)}
     <button class="btn btn-sm btn-o" onclick="eraserUndo()" style="width:auto">↩ Geri Al</button>
     <button class="btn btn-sm btn-p" onclick="closeEraser(true)" style="width:auto">✅ Kaydet</button>
   </div>
-  <div class="eraser-wrap">
+  <div class="eraser-wrap" id="eraser-wrap">
     <canvas id="eraser-canvas"></canvas>
+    <canvas id="eraser-cursor" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none"></canvas>
   </div>
   <div class="eraser-bar">
     <span class="eraser-hint">🔲 Silgi boyutu:</span>
@@ -970,32 +971,61 @@ function eraserRotate(){
     // Limit history to 20 steps
     if(_eraserHistory.length > 21) _eraserHistory.shift();
     const p = getPos(e, cvs);
-    ctx.save();
-    ctx.globalCompositeOperation = 'destination-out';
-    ctx.fillStyle = 'rgba(0,0,0,1)';
-    const r = parseInt(document.getElementById('eraser-size').value);
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, r, 0, Math.PI*2);
-    ctx.fill();
-    ctx.restore();
-    // Beyaz arka plan koru
-    paintWhite(ctx, cvs, p.x, p.y, r);
-  }
-
-  function eraserMove(e){
-    if(!_eraserDrawing) return;
-    e.preventDefault();
-    const cvs = document.getElementById('eraser-canvas');
-    const ctx = cvs.getContext('2d');
-    const p = getPos(e, cvs);
-    const r = parseInt(document.getElementById('eraser-size').value);
+    const r = parseInt(document.getElementById('eraser-size').value) * (cvs.width / cvs.getBoundingClientRect().width);
+    drawCursor(p, r);
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
     ctx.arc(p.x, p.y, r, 0, Math.PI*2);
     ctx.fill();
   }
 
-  function eraserEnd(){ _eraserDrawing = false; }
+  function drawCursor(p, r){
+    const cur = document.getElementById('eraser-cursor');
+    const cvs = document.getElementById('eraser-canvas');
+    const cctx = cur.getContext('2d');
+    cur.width  = cvs.width;
+    cur.height = cvs.height;
+    cctx.clearRect(0,0,cur.width,cur.height);
+    // Dış renkli halka
+    cctx.beginPath();
+    cctx.arc(p.x, p.y, r, 0, Math.PI*2);
+    cctx.strokeStyle = '#6c63ff';
+    cctx.lineWidth = 3;
+    cctx.stroke();
+    // İç ince beyaz çizgi
+    cctx.beginPath();
+    cctx.arc(p.x, p.y, r-3, 0, Math.PI*2);
+    cctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    cctx.lineWidth = 1.5;
+    cctx.stroke();
+    // Merkez nokta
+    cctx.beginPath();
+    cctx.arc(p.x, p.y, 2, 0, Math.PI*2);
+    cctx.fillStyle = '#ff4757';
+    cctx.fill();
+  }
+
+  function clearCursor(){
+    const cur = document.getElementById('eraser-cursor');
+    if(cur) cur.getContext('2d').clearRect(0,0,cur.width,cur.height);
+  }
+
+  function eraserMove(e){
+    e.preventDefault();
+    const cvs = document.getElementById('eraser-canvas');
+    const ctx = cvs.getContext('2d');
+    const p = getPos(e, cvs);
+    const scale = cvs.width / cvs.getBoundingClientRect().width;
+    const r = parseInt(document.getElementById('eraser-size').value) * scale;
+    drawCursor(p, r);
+    if(!_eraserDrawing) return;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  function eraserEnd(){ _eraserDrawing = false; clearCursor(); }
 
   function paintWhite(ctx, cvs, x, y, r){
     ctx.fillStyle = '#ffffff';
