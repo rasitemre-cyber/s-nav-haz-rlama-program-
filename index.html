@@ -952,7 +952,13 @@ function eraserRotate(){
   function getPos(e, cvs){
     const r = cvs.getBoundingClientRect();
     const touch = e.touches ? e.touches[0] : e;
-    return { x: touch.clientX - r.left, y: touch.clientY - r.top };
+    // Canvas gerçek piksel boyutu ile ekrandaki görünen boyutu farklı olabilir
+    const scaleX = cvs.width  / r.width;
+    const scaleY = cvs.height / r.height;
+    return {
+      x: (touch.clientX - r.left) * scaleX,
+      y: (touch.clientY - r.top)  * scaleY
+    };
   }
 
   function eraserStart(e){
