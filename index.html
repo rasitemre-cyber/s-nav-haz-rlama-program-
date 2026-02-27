@@ -142,7 +142,7 @@ body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text)}
 .stat .n{font-size:20px;font-weight:900;color:var(--accent2)}
 .stat .l{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
 .prev-student{background:var(--card);border:1.5px solid var(--border);border-radius:14px;padding:12px;display:flex;gap:12px;margin-bottom:8px;align-items:center}
-.prev-student img{width:42px;height:54px;object-fit:cover;border-radius:8px;flex-shrink:0;border:1.5px solid var(--border)}
+.prev-student img{width:38px;height:54px;object-fit:cover;border-radius:4px;flex-shrink:0;border:1.5px solid var(--border)}
 .prev-ph{width:42px;height:54px;background:var(--card2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
 .prev-info .nm{font-size:13px;font-weight:700;color:var(--text)}
 .prev-info .id{font-size:11px;color:var(--muted);margin-top:2px;font-weight:600}
@@ -941,9 +941,9 @@ async function makePDF(){
 
       if(st.photoB64){
         try{
-          doc.addImage('data:image/jpeg;base64,'+st.photoB64,'JPEG',M+3,y+3,13,18);
+          doc.addImage('data:image/jpeg;base64,'+st.photoB64,'JPEG',M+3,y+3,12,20);
           doc.setDrawColor(...INK3); doc.setLineWidth(0.3);
-          doc.rect(M+3,y+3,13,18,'S');
+          doc.rect(M+3,y+3,12,20,'S');
         }catch(e){}
       } else {
         doc.setFillColor(...INK3); doc.rect(M+3,y+3,13,18,'F');
