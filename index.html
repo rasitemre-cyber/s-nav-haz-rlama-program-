@@ -710,10 +710,31 @@ function snap(){
 
   const cvs=document.getElementById('cvs');
   const vw=vid.videoWidth, vh=vid.videoHeight;
-  cvs.width = vw;
-  cvs.height = vh;
-  const ctx=cvs.getContext('2d');
-  ctx.drawImage(vid, 0, 0);
+
+  // Ekranda görünen alanı hesapla (object-fit:cover mantığı)
+  const dispW = vid.clientWidth, dispH = vid.clientHeight;
+  const videoAspect = vw / vh;
+  const dispAspect  = dispW / dispH;
+
+  let srcX, srcY, srcW, srcH;
+  if (videoAspect > dispAspect) {
+    // Video daha geniş → yatayda kırp
+    srcH = vh;
+    srcW = Math.round(vh * dispAspect);
+    srcX = Math.round((vw - srcW) / 2);
+    srcY = 0;
+  } else {
+    // Video daha uzun → dikeyde kırp
+    srcW = vw;
+    srcH = Math.round(vw / dispAspect);
+    srcX = 0;
+    srcY = Math.round((vh - srcH) / 2);
+  }
+
+  cvs.width  = srcW;
+  cvs.height = srcH;
+  const ctx = cvs.getContext('2d');
+  ctx.drawImage(vid, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH);
 
   const processed = docEffect(cvs);
 
