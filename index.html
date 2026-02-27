@@ -47,7 +47,7 @@ body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text)}
 .hero-orb{width:80px;height:80px;background:linear-gradient(135deg,#6c63ff,#c084fc);border-radius:22px;display:inline-flex;align-items:center;justify-content:center;font-size:38px;margin-bottom:20px;box-shadow:0 0 50px rgba(108,99,255,.5),0 0 100px rgba(108,99,255,.2);position:relative;z-index:1}
 .hero-title{font-size:30px;font-weight:900;color:var(--text);letter-spacing:-1px;position:relative;z-index:1;margin-bottom:8px}
 .hero-title span{background:linear-gradient(135deg,var(--accent2),#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.hero-sub{font-size:14px;color:var(--muted);line-height:1.7;position:relative;z-index:1;font-weight:600}
+.hero-credit{font-size:10px;color:var(--muted);opacity:0.5;margin-top:6px;letter-spacing:0.5px;font-style:italic}
 
 /* ── FORM CARD ── */
 .form-card{background:var(--card);border:1.5px solid var(--border);border-radius:24px;padding:24px;width:calc(100% - 32px);max-width:420px;margin:-24px 16px 0;position:relative;z-index:2;box-shadow:0 24px 60px rgba(0,0,0,.5)}
@@ -214,6 +214,7 @@ body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text)}
     <div class="hero-orb">📚</div>
     <div class="hero-title">Soru <span>Bankası</span></div>
     <div class="hero-sub">Fotoğraflı öğrenci listesiyle<br>profesyonel test oluşturun</div>
+    <div class="hero-credit">designed by Raşit Emre</div>
   </div>
 
   <div class="form-card">
@@ -241,6 +242,7 @@ body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text)}
     <div class="prog" id="prog"><div class="prog-fill" id="pfill"></div></div>
     <button class="btn btn-p" id="btn-go" disabled onclick="gotoClasses()">Sınıf Listesine Geç →</button>
   </div>
+  <div style="text-align:center;padding:16px 0 8px;font-size:10px;color:var(--muted);opacity:0.4;font-style:italic;letter-spacing:0.5px">designed by Raşit Emre</div>
 </div>
 
 <!-- SCREEN 1: CLASS SELECTION -->
@@ -1070,6 +1072,8 @@ async function makePDF(){
       doc.text(S.school, M, PH-3.5);
       doc.text(`${si+1} / ${students.length}`, PW-M, PH-3.5, {align:'right'});
       doc.text(ttl, PW/2, PH-3.5, {align:'center'});
+      doc.setFontSize(5); doc.setTextColor(180,180,180);
+      doc.text('designed by Raşit Emre', PW-M, PH-1, {align:'right'});
     }
 
     const fname=`${S.selClass.replace(/\s*\/\s*/g,'-').replace(/\s+/g,'_')}_`
@@ -1102,14 +1106,10 @@ function openEraser(dataURL, idx){
     const maxW = window.innerWidth;
     const maxH = window.innerHeight - 130;
     const scale = Math.min(maxW / img.width, maxH / img.height);
-    const dispW = Math.round(img.width  * scale);
-    const dispH = Math.round(img.height * scale);
-    // Canvas piksel boyutu = yüksek çözünürlük için orijinal boyut
-    cvs.width  = img.width;
-    cvs.height = img.height;
-    // CSS boyutu = ekranda görünen boyut (scale'li)
-    cvs.style.width  = dispW + 'px';
-    cvs.style.height = dispH + 'px';
+    cvs.width  = Math.round(img.width  * scale);
+    cvs.height = Math.round(img.height * scale);
+    cvs.style.width  = '';
+    cvs.style.height = '';
     cvs.dataset.scale  = scale;
     cvs.dataset.origW  = img.width;
     cvs.dataset.origH  = img.height;
@@ -1156,10 +1156,9 @@ function eraserUndo(){
 function eraserRotate(){
   const cvs = document.getElementById('eraser-canvas');
   const ctx = cvs.getContext('2d');
-  // Mevcut görüntüyü kaydet
   _eraserHistory.push(ctx.getImageData(0,0,cvs.width,cvs.height));
 
-  // 90° saat yönünde döndür
+  // 90° saat yönünde döndür — tmp canvas'a
   const tmp = document.createElement('canvas');
   tmp.width  = cvs.height;
   tmp.height = cvs.width;
@@ -1168,15 +1167,18 @@ function eraserRotate(){
   tctx.rotate(Math.PI/2);
   tctx.drawImage(cvs, 0, 0);
 
-  // Yeni boyutları uygula
-  cvs.width  = tmp.width;
-  cvs.height = tmp.height;
-  // dataset güncelle (kaydederken kullanılır)
+  // Ekrana sığacak şekilde yeniden ölçekle
+  const maxW = window.innerWidth;
+  const maxH = window.innerHeight - 130;
+  const scale = Math.min(maxW / tmp.width, maxH / tmp.height);
+  cvs.width  = Math.round(tmp.width  * scale);
+  cvs.height = Math.round(tmp.height * scale);
+  cvs.style.width  = '';
+  cvs.style.height = '';
   cvs.dataset.origW = tmp.width;
   cvs.dataset.origH = tmp.height;
-  ctx.drawImage(tmp, 0, 0);
+  ctx.drawImage(tmp, 0, 0, cvs.width, cvs.height);
 
-  // History sıfırla (boyut değişti)
   _eraserHistory = [ctx.getImageData(0,0,cvs.width,cvs.height)];
 }
 
