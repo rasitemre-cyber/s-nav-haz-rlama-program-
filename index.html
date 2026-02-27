@@ -60,6 +60,8 @@ body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text)}
 .fi:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(108,99,255,.18)}
 .fi::placeholder{color:var(--muted)}
 
+.btn-last-list{border:2px dashed var(--border);border-radius:14px;padding:12px 10px;text-align:center;cursor:pointer;background:var(--card2);color:var(--text);display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:70px;transition:all .2s;flex-shrink:0}
+.btn-last-list:hover{border-color:var(--accent2);background:rgba(255,179,0,.08);color:var(--accent2)}
 .upload{border:2px dashed var(--border);border-radius:14px;padding:22px;text-align:center;cursor:pointer;transition:all .2s;background:var(--card2)}
 .upload:hover,.upload.drag{border-color:var(--accent);background:rgba(108,99,255,.07)}
 .upload.ok{border-color:var(--green);background:rgba(46,213,115,.05);border-style:solid}
@@ -232,10 +234,16 @@ body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text)}
     </div>
     <div class="fg">
       <label class="fl">Öğrenci Listesi</label>
-      <div class="upload" id="dz" onclick="document.getElementById('fp').click()">
-        <div class="upload-ico">📂</div>
-        <div class="upload-txt" id="dz-txt">e-Okul PDF Yükle</div>
-        <div class="upload-hint" id="dz-hint">Dokunun veya PDF dosyasını sürükleyin</div>
+      <div style="display:flex;gap:8px;align-items:stretch">
+        <div class="upload" id="dz" onclick="document.getElementById('fp').click()" style="flex:1">
+          <div class="upload-ico">📂</div>
+          <div class="upload-txt" id="dz-txt">e-Okul PDF Yükle</div>
+          <div class="upload-hint" id="dz-hint">Dokunun veya PDF dosyasını sürükleyin</div>
+        </div>
+        <button class="btn-last-list" id="btn-last" onclick="loadLastList()" style="display:none">
+          <div style="font-size:22px">🕘</div>
+          <div style="font-size:11px;font-weight:700;margin-top:4px">Son<br>Liste</div>
+        </button>
       </div>
       <input type="file" id="fp" accept=".pdf,application/pdf" style="display:none">
     </div>
@@ -583,6 +591,13 @@ async function parsePDF(file) {
     dz.className = 'upload ok';
     document.getElementById('btn-go').disabled = false;
     toast(`${nc} sınıf • ${ns} öğrenci yüklendi`,'ok');
+    // Son listeyi localStorage'a kaydet
+    try{
+      localStorage.setItem('lastClasses', JSON.stringify(classes));
+      localStorage.setItem('lastSchool', schoolName || '');
+      localStorage.setItem('lastListInfo', JSON.stringify({nc, ns, school: schoolName}));
+      document.getElementById('btn-last').style.display = 'flex';
+    }catch(e){}
 
   } catch(err) {
     console.error('parsePDF error:', err);
@@ -594,6 +609,43 @@ async function parsePDF(file) {
   prog.style.display='none';
 }
 
+
+// ─── SON LİSTE ────────────────────────────
+function loadLastList(){
+  try{
+    const raw = localStorage.getItem('lastClasses');
+    const info = JSON.parse(localStorage.getItem('lastListInfo') || '{}');
+    const school = localStorage.getItem('lastSchool') || '';
+    if(!raw){ toast('Kayıtlı liste bulunamadı','err'); return; }
+    S.classes = JSON.parse(raw);
+    if(school){
+      const sf = document.getElementById('f-school');
+      if(!sf.value) sf.value = school;
+    }
+    const dz = document.getElementById('dz');
+    dz.innerHTML = `<div class="upload-ico">✅</div>
+      <div class="upload-txt">${info.nc} Sınıf Yüklendi</div>
+      <div class="upload-hint">${info.ns} öğrenci • son kayıt</div>`;
+    dz.className = 'upload ok';
+    document.getElementById('btn-go').disabled = false;
+    toast(`${info.nc} sınıf • ${info.ns} öğrenci yüklendi`,'ok');
+  }catch(e){
+    toast('Liste yüklenemedi: '+e.message,'err');
+  }
+}
+
+// Sayfa yüklenince son liste butonu varsa göster
+(function(){
+  if(localStorage.getItem('lastClasses')){
+    const btn = document.getElementById('btn-last');
+    if(btn) btn.style.display='flex';
+    const info = JSON.parse(localStorage.getItem('lastListInfo')||'{}');
+    if(info.school){
+      const sf = document.getElementById('f-school');
+      if(sf && !sf.value) sf.placeholder = info.school;
+    }
+  }
+})();
 
 document.getElementById('fp').addEventListener('change', e=>{
   const file = e.target.files[0];
