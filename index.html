@@ -635,7 +635,7 @@ function loadLastList(){
 }
 
 // Sayfa yüklenince son liste butonu varsa göster
-(function(){
+document.addEventListener('DOMContentLoaded', function(){
   if(localStorage.getItem('lastClasses')){
     const btn = document.getElementById('btn-last');
     if(btn) btn.style.display='flex';
@@ -645,7 +645,7 @@ function loadLastList(){
       if(sf && !sf.value) sf.placeholder = info.school;
     }
   }
-})();
+});
 
 document.getElementById('fp').addEventListener('change', e=>{
   const file = e.target.files[0];
