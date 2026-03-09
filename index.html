@@ -375,7 +375,6 @@ body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text)}
         <div class="crop-handle" data-pos="tr" style="top:-6px;right:-6px"></div>
         <div class="crop-handle" data-pos="bl" style="bottom:-6px;left:-6px"></div>
         <div class="crop-handle" data-pos="br" style="bottom:-6px;right:-6px"></div>
-        <div class="crop-confirm"><button onclick="applyCrop()" class="btn btn-sm btn-p" style="width:auto;pointer-events:all">✂️ Uygula</button></div>
       </div>
     </div>
   </div>
@@ -1204,6 +1203,9 @@ function closeEraser(save){
   const bg  = document.getElementById('eraser-bg');
   const cvs = document.getElementById('eraser-canvas');
 
+  // Kırpma aktifse önce uygula
+  if(save && _cropActive){ applyCrop(); return; }
+
   if(save && _eraserIdx >= 0){
     // Canvas'taki mevcut görüntüyü direkt kaydet (ölçekleme yok, ne görünüyorsa o)
     const dataURL = cvs.toDataURL('image/jpeg', 0.95);
@@ -1375,9 +1377,12 @@ function applyCrop(){
   ctx.drawImage(tmp, 0, 0, cvs.width, cvs.height);
   _eraserHistory = [ctx.getImageData(0,0,cvs.width,cvs.height)];
 
-  // Kırp modunu kapat
-  toggleCrop();
-  toast('Kırpıldı ✂️','ok');
+  // Kırp modunu kapat ve kaydet
+  _cropActive = false;
+  document.getElementById('crop-overlay').style.display = 'none';
+  document.getElementById('eraser-canvas').style.pointerEvents = '';
+  // Kırpılan görüntüyü kaydet ve editörü kapat
+  closeEraser(true);
 }
 
 function eraserRotate(){
