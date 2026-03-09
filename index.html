@@ -70,6 +70,8 @@ body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text)}
 .fi:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(108,99,255,.18)}
 .fi::placeholder{color:var(--muted)}
 
+.btn-warn{background:rgba(255,71,87,.15);color:#ff4757;border-color:#ff4757}
+.btn-warn:hover{background:rgba(255,71,87,.25)}
 .btn-last-list{border:2px dashed var(--border);border-radius:14px;padding:12px 10px;text-align:center;cursor:pointer;background:var(--card2);color:var(--text);display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:70px;transition:all .2s;flex-shrink:0}
 .btn-last-list:hover{border-color:var(--accent2);background:rgba(255,179,0,.08);color:var(--accent2)}
 .upload{border:2px dashed var(--border);border-radius:14px;padding:22px;text-align:center;cursor:pointer;transition:all .2s;background:var(--card2)}
@@ -195,6 +197,9 @@ body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text)}
 .eraser-topbar h2{font-size:15px;font-weight:800;flex:1}
 .eraser-wrap{flex:1;overflow:hidden;position:relative;display:flex;align-items:flex-start;justify-content:center;background:#111}
 #eraser-canvas{touch-action:none;cursor:crosshair;display:block;}
+.crop-handle{position:absolute;width:14px;height:14px;background:#6c63ff;border:2px solid #fff;border-radius:3px;pointer-events:all;cursor:nwse-resize;z-index:10}
+.crop-confirm{position:absolute;bottom:-40px;left:50%;transform:translateX(-50%);white-space:nowrap;z-index:10}
+#crop-overlay{z-index:5}
 .eraser-bar{display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--card);border-top:1px solid var(--border);flex-shrink:0}
 .eraser-size{-webkit-appearance:none;appearance:none;flex:1;height:4px;background:var(--border);border-radius:2px;outline:none}
 .eraser-size::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;background:var(--accent);border-radius:50%}
@@ -356,12 +361,23 @@ body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text)}
     <button class="bar-back" onclick="closeEraser(false)">✕</button>
     <h2>✏️ Düzenle</h2>
     <button class="btn btn-sm btn-o" onclick="eraserRotate()" style="width:auto">🔄 Döndür</button>
+    <button class="btn btn-sm btn-o" id="btn-crop" onclick="toggleCrop()" style="width:auto">✂️ Kırp</button>
     <button class="btn btn-sm btn-o" onclick="eraserUndo()" style="width:auto">↩ Geri Al</button>
     <button class="btn btn-sm btn-p" onclick="closeEraser(true)" style="width:auto">✅ Kaydet</button>
   </div>
   <div class="eraser-wrap" id="eraser-wrap">
     <canvas id="eraser-canvas"></canvas>
     <canvas id="eraser-cursor" style="position:absolute;top:0;left:0;pointer-events:none"></canvas>
+    <div id="crop-overlay" style="display:none;position:absolute;inset:0;pointer-events:none">
+      <div style="position:absolute;inset:0;background:rgba(0,0,0,0.55)"></div>
+      <div id="crop-box" style="position:absolute;border:2px solid #6c63ff;box-shadow:0 0 0 9999px rgba(0,0,0,0.55);box-sizing:border-box;pointer-events:all;cursor:move">
+        <div class="crop-handle" data-pos="tl" style="top:-6px;left:-6px"></div>
+        <div class="crop-handle" data-pos="tr" style="top:-6px;right:-6px"></div>
+        <div class="crop-handle" data-pos="bl" style="bottom:-6px;left:-6px"></div>
+        <div class="crop-handle" data-pos="br" style="bottom:-6px;right:-6px"></div>
+        <div class="crop-confirm"><button onclick="applyCrop()" class="btn btn-sm btn-p" style="width:auto;pointer-events:all">✂️ Uygula</button></div>
+      </div>
+    </div>
   </div>
   <div class="eraser-bar">
     <span class="eraser-hint">🔲 Silgi boyutu:</span>
@@ -1217,6 +1233,153 @@ function eraserUndo(){
   cvs.getContext('2d').putImageData(_eraserHistory[_eraserHistory.length-1], 0, 0);
 }
 
+
+// ─── KIRP ─────────────────────────────────
+let _cropActive = false;
+let _cropDrag = null; // {type:'move'|'tl'|'tr'|'bl'|'br', startX, startY, startBox}
+
+function toggleCrop(){
+  const overlay = document.getElementById('crop-overlay');
+  const btn = document.getElementById('btn-crop');
+  const cvs = document.getElementById('eraser-canvas');
+  _cropActive = !_cropActive;
+
+  if(_cropActive){
+    // Kırpma başlat - canvas üzerinde ortalanmış kutu
+    const cvsRect = cvs.getBoundingClientRect();
+    const pad = 20;
+    const box = document.getElementById('crop-box');
+    box.style.left   = pad + 'px';
+    box.style.top    = pad + 'px';
+    box.style.width  = (cvsRect.width  - pad*2) + 'px';
+    box.style.height = (cvsRect.height - pad*2) + 'px';
+    overlay.style.display = 'block';
+    overlay.style.width  = cvsRect.width  + 'px';
+    overlay.style.height = cvsRect.height + 'px';
+    overlay.style.left = cvsRect.left - cvs.parentElement.getBoundingClientRect().left + 'px';
+    overlay.style.top  = cvsRect.top  - cvs.parentElement.getBoundingClientRect().top  + 'px';
+    btn.textContent = '✕ İptal';
+    btn.classList.replace('btn-o','btn-warn') || btn.classList.add('btn-warn');
+    // Silgiyi devre dışı bırak
+    document.getElementById('eraser-canvas').style.pointerEvents = 'none';
+    initCropDrag();
+  } else {
+    overlay.style.display = 'none';
+    btn.textContent = '✂️ Kırp';
+    btn.classList.replace('btn-warn','btn-o');
+    document.getElementById('eraser-canvas').style.pointerEvents = '';
+    _cropActive = false;
+  }
+}
+
+function initCropDrag(){
+  const overlay = document.getElementById('crop-overlay');
+  const box     = document.getElementById('crop-box');
+  const cvs     = document.getElementById('eraser-canvas');
+
+  function getXY(e){ 
+    const t = e.touches ? e.touches[0] : e;
+    return {x: t.clientX, y: t.clientY};
+  }
+
+  function boxRect(){
+    return {
+      l: parseInt(box.style.left),
+      t: parseInt(box.style.top),
+      w: parseInt(box.style.width),
+      h: parseInt(box.style.height)
+    };
+  }
+
+  function onStart(e){
+    if(!_cropActive) return;
+    const pos = e.target.dataset.pos;
+    const {x,y} = getXY(e);
+    const br = boxRect();
+    _cropDrag = {type: pos || 'move', startX:x, startY:y, startBox:{...br}};
+    e.preventDefault();
+  }
+
+  function onMove(e){
+    if(!_cropDrag || !_cropActive) return;
+    e.preventDefault();
+    const {x,y} = getXY(e);
+    const dx = x - _cropDrag.startX;
+    const dy = y - _cropDrag.startY;
+    const sb = _cropDrag.startBox;
+    const cvsRect = cvs.getBoundingClientRect();
+    const maxW = cvsRect.width, maxH = cvsRect.height;
+    const MIN = 40;
+    let {l,t,w,h} = sb;
+
+    if(_cropDrag.type === 'move'){
+      l = Math.max(0, Math.min(maxW-w, sb.l+dx));
+      t = Math.max(0, Math.min(maxH-h, sb.t+dy));
+    } else {
+      if(_cropDrag.type.includes('r')) w = Math.max(MIN, Math.min(maxW-sb.l, sb.w+dx));
+      if(_cropDrag.type.includes('b')) h = Math.max(MIN, Math.min(maxH-sb.t, sb.h+dy));
+      if(_cropDrag.type.includes('l')){ l = Math.max(0, Math.min(sb.l+sb.w-MIN, sb.l+dx)); w = sb.w - (l-sb.l); }
+      if(_cropDrag.type.includes('t')){ t = Math.max(0, Math.min(sb.t+sb.h-MIN, sb.t+dy)); h = sb.h - (t-sb.t); }
+    }
+
+    box.style.left   = l + 'px';
+    box.style.top    = t + 'px';
+    box.style.width  = w + 'px';
+    box.style.height = h + 'px';
+  }
+
+  function onEnd(){ _cropDrag = null; }
+
+  // Box sürükleme
+  box.addEventListener('mousedown',  onStart);
+  box.addEventListener('touchstart', onStart, {passive:false});
+  // Handle sürükleme
+  box.querySelectorAll('.crop-handle').forEach(el => {
+    el.addEventListener('mousedown',  onStart);
+    el.addEventListener('touchstart', onStart, {passive:false});
+  });
+  document.addEventListener('mousemove',  onMove);
+  document.addEventListener('touchmove',  onMove, {passive:false});
+  document.addEventListener('mouseup',    onEnd);
+  document.addEventListener('touchend',   onEnd);
+}
+
+function applyCrop(){
+  const cvs = document.getElementById('eraser-canvas');
+  const ctx  = cvs.getContext('2d');
+  const box  = document.getElementById('crop-box');
+  const cvsRect = cvs.getBoundingClientRect();
+
+  // Ekran koordinatlarını canvas piksellerine çevir
+  const scaleX = cvs.width  / cvsRect.width;
+  const scaleY = cvs.height / cvsRect.height;
+
+  const bx = Math.round(parseInt(box.style.left)   * scaleX);
+  const by = Math.round(parseInt(box.style.top)    * scaleY);
+  const bw = Math.round(parseInt(box.style.width)  * scaleX);
+  const bh = Math.round(parseInt(box.style.height) * scaleY);
+
+  // Kırpılmış alanı yeni canvas'a çiz
+  _eraserHistory.push(ctx.getImageData(0,0,cvs.width,cvs.height));
+  const tmp = document.createElement('canvas');
+  tmp.width = bw; tmp.height = bh;
+  tmp.getContext('2d').drawImage(cvs, bx, by, bw, bh, 0, 0, bw, bh);
+
+  // Ekrana sığdır
+  const maxW = window.innerWidth;
+  const maxH = window.innerHeight - 130;
+  const scale = Math.min(maxW/bw, maxH/bh);
+  cvs.width  = Math.round(bw * scale);
+  cvs.height = Math.round(bh * scale);
+  cvs.style.width = ''; cvs.style.height = '';
+  ctx.drawImage(tmp, 0, 0, cvs.width, cvs.height);
+  _eraserHistory = [ctx.getImageData(0,0,cvs.width,cvs.height)];
+
+  // Kırp modunu kapat
+  toggleCrop();
+  toast('Kırpıldı ✂️','ok');
+}
+
 function eraserRotate(){
   const cvs = document.getElementById('eraser-canvas');
   const ctx  = cvs.getContext('2d');
@@ -1375,6 +1538,15 @@ function toast(msg,type=''){
 // drag events handled in parsePDF section
 
 document.getElementById('m-dt').value=new Date().toISOString().split('T')[0];
+</script>
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('./sw.js')
+      .then(r => console.log('SW registered'))
+      .catch(e => console.log('SW error:', e));
+  });
+}
 </script>
 </body>
 </html>
